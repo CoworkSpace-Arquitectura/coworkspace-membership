@@ -1,0 +1,37 @@
+@baseUrl = http://localhost:3002
+
+### Crear un miembro
+# @name miembro
+POST {{baseUrl}}/members
+Content-Type: application/json
+
+{ "name": "Juan José Ospino", "email": "juanjo@example.com" }
+
+### Crear un plan
+# @name plan
+POST {{baseUrl}}/plans
+Content-Type: application/json
+
+{ "name": "Puesto flexible", "price": 350000, "resourceAccess": ["DESK", "ROOM"] }
+
+### Suscribir al miembro (publica membership.activated)
+# @name suscripcion
+POST {{baseUrl}}/subscriptions
+Content-Type: application/json
+
+{ "memberId": "{{miembro.response.body.id}}", "planId": "{{plan.response.body.id}}" }
+
+### Ver la suscripción activa del miembro
+GET {{baseUrl}}/subscriptions/member/{{miembro.response.body.id}}/active
+
+### Suscribirlo otra vez: debe fallar con 409
+POST {{baseUrl}}/subscriptions
+Content-Type: application/json
+
+{ "memberId": "{{miembro.response.body.id}}", "planId": "{{plan.response.body.id}}" }
+
+### Cancelar la suscripción (publica membership.expired)
+PATCH {{baseUrl}}/subscriptions/{{suscripcion.response.body.id}}/cancel
+
+### Procesar renovaciones manualmente
+POST {{baseUrl}}/subscriptions/process-renewals
