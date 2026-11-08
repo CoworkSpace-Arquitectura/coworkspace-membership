@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ResourceType {
+  DESK
+  ROOM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model Member {
+  id            String         @id @default(uuid())
+  name          String
+  email         String         @unique
+  createdAt     DateTime       @default(now()) @map("created_at")
+  subscriptions Subscription[]
+
+  @@map("members")
+}
+
+model MembershipPlan {
+  id             String         @id @default(uuid())
+  name           String         @unique
+  price          Int
+  resourceAccess ResourceType[] @map("resource_access")
+  subscriptions  Subscription[]
+
+  @@map("membership_plans")
+}
+
+model Subscription {
+  id        String             @id @default(uuid())
+  memberId  String             @map("member_id")
+  planId    String             @map("plan_id")
+  status    SubscriptionStatus @default(ACTIVE)
+  autoRenew Boolean            @default(true) @map("auto_renew")
+  startedAt DateTime           @default(now()) @map("started_at")
+  renewsAt  DateTime           @map("renews_at")
+  member    Member             @relation(fields: [memberId], references: [id])
+  plan      MembershipPlan     @relation(fields: [planId], references: [id])
+
+  @@index([memberId])
+  @@index([status, renewsAt])
+  @@map("subscriptions")
+}
