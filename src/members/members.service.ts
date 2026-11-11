@@ -14,8 +14,11 @@ export class MembersService {
     return this.prisma.member.create({ data: { name: dto.name, email: dto.email } });
   }
 
-  findAll() {
-    return this.prisma.member.findMany({ orderBy: { createdAt: 'desc' } });
+  findAll(email?: string) {
+    return this.prisma.member.findMany({
+      where: { email },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async findOne(id: string) {
