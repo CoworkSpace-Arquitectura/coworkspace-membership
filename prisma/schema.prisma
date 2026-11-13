@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  MEMBER
+  MANAGER
+  OWNER
+}
+
 enum ResourceType {
   DESK
   ROOM
@@ -22,6 +28,8 @@ model Member {
   id            String         @id @default(uuid())
   name          String
   email         String         @unique
+  passwordHash  String?        @map("password_hash")
+  role          Role           @default(MEMBER)
   createdAt     DateTime       @default(now()) @map("created_at")
   subscriptions Subscription[]
 
