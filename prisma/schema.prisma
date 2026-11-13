@@ -19,6 +19,7 @@ enum ResourceType {
 }
 
 enum SubscriptionStatus {
+  PENDING_PAYMENT
   ACTIVE
   EXPIRED
   CANCELLED

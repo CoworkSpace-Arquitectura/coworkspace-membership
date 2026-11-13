@@ -23,6 +23,10 @@ export class SubscriptionsService {
     private readonly events: EventsService,
   ) {}
 
+  /**
+   * Saga del plan, paso 1: la suscripción nace pendiente de pago y se pide el cobro a Billing.
+   * Un plan gratuito (precio 0) se activa de inmediato.
+   */
   async create(dto: CreateSubscriptionDto) {
     const member = await this.prisma.member.findUnique({ where: { id: dto.memberId } });
     if (!member) {
@@ -39,17 +43,68 @@ export class SubscriptionsService {
       throw new ConflictException('El miembro ya tiene una suscripción activa');
     }
 
+    // Si dejó un pago sin terminar (por ejemplo, eligió otro plan), ese intento se descarta
+    await this.prisma.subscription.updateMany({
+      where: { memberId: dto.memberId, status: SubscriptionStatus.PENDING_PAYMENT },
+      data: { status: SubscriptionStatus.CANCELLED, autoRenew: false },
+    });
+
+    const free = plan.price === 0;
     const subscription = await this.prisma.subscription.create({
       data: {
         memberId: dto.memberId,
         planId: dto.planId,
         autoRenew: dto.autoRenew ?? true,
+        status: free ? SubscriptionStatus.ACTIVE : SubscriptionStatus.PENDING_PAYMENT,
         renewsAt: addMonths(new Date(), 1),
       },
       include: { plan: true },
     });
-    await this.publishActivated(subscription, false);
+
+    if (free) {
+      await this.publishActivated(subscription, false);
+    } else {
+      await this.events.publish('membership.payment.requested', {
+        subscriptionId: subscription.id,
+        memberId: subscription.memberId,
+        planName: subscription.plan.name,
+        price: subscription.plan.price,
+        currency: 'COP',
+      });
+    }
     return subscription;
+  }
+
+  /** Saga del plan, paso 3 (éxito): Billing confirmó el pago → se activa. Idempotente. */
+  async activatePaid(subscriptionId: string) {
+    const now = new Date();
+    const { count } = await this.prisma.subscription.updateMany({
+      where: { id: subscriptionId, status: SubscriptionStatus.PENDING_PAYMENT },
+      data: { status: SubscriptionStatus.ACTIVE, startedAt: now, renewsAt: addMonths(now, 1) },
+    });
+    if (count === 0) {
+      this.logger.warn(`La suscripción ${subscriptionId} no estaba pendiente de pago`);
+      return false;
+    }
+    const subscription = await this.prisma.subscription.findUniqueOrThrow({
+      where: { id: subscriptionId },
+      include: { plan: true },
+    });
+    await this.publishActivated(subscription, false);
+    this.logger.log(`Suscripción ${subscriptionId} activada: pago aprobado`);
+    return true;
+  }
+
+  /** Saga del plan, paso 3 (compensación): el pago falló → la suscripción no se activa. */
+  async discardUnpaid(subscriptionId: string, reason: string) {
+    const { count } = await this.prisma.subscription.updateMany({
+      where: { id: subscriptionId, status: SubscriptionStatus.PENDING_PAYMENT },
+      data: { status: SubscriptionStatus.CANCELLED, autoRenew: false },
+    });
+    if (count > 0) {
+      this.logger.log(`Suscripción ${subscriptionId} descartada: ${reason}`);
+    }
+    return count > 0;
   }
 
   findAll(memberId?: string) {
