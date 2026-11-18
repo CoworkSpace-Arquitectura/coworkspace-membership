@@ -6,3 +6,8 @@ Microservicio de miembros, planes y suscripciones. Publica los eventos `membersh
 
 - **Endpoints:** `/members`, `/plans`, `/subscriptions`
 - **Puerto local:** 3002
+
+## Documentación de la API
+
+- Swagger UI desplegado: https://coworkspace-membership.onrender.com/docs
+- En local: http://localhost:<PUERTO>/docs (el JSON OpenAPI está en `/docs-json`).
